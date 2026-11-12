@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TEAM Ladder</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Figtree:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f1b3d;--panel:#16264f;--ink:#f3f6ff;--mute:#9db0dd;--p0:#ff4d6d;--p1:#ffd23f;--p2:#3bceac;--p3:#4cc9f0;--p4:#b388ff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Figtree,system-ui,sans-serif;display:flex;justify-content:center;padding:20px}
+main{width:100%;max-width:760px}
+h1,.tile,.big{font-family:Anton,Impact,sans-serif;font-weight:400;letter-spacing:.02em}
+h1{font-size:44px;margin:0 0 4px}h2{font-size:18px;margin:24px 0 8px}
+p{color:var(--mute);margin:4px 0 16px}
+.panel{background:var(--panel);border-radius:14px;padding:18px;margin-bottom:16px}
+input,button{font:inherit;border-radius:10px;border:2px solid #2a3d73;background:#0b1530;color:var(--ink);padding:10px 14px}
+input{width:100%;margin-bottom:10px}input::placeholder{color:#5c6f9f}
+button{cursor:pointer;font-weight:700;background:var(--p1);color:#1a1400;border-color:var(--p1)}
+button.alt{background:transparent;color:var(--ink);border-color:#2a3d73}
+button:disabled{opacity:.4;cursor:not-allowed}
+:focus-visible{outline:3px solid var(--p3);outline-offset:2px}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1}
+.tiles{display:flex;gap:10px;justify-content:center;margin:12px 0}
+.tile{width:72px;height:92px;border-radius:12px;background:#fff;color:#0f1b3d;font-size:56px;display:grid;place-items:center;border:0;padding:0}
+.tile.sel{outline:4px solid var(--p1)}.tile.goal{background:var(--p2);width:44px;height:56px;font-size:32px;cursor:default}
+.pl{display:inline-flex;align-items:center;gap:8px;margin:0 14px 6px 0;font-weight:600}
+.dot{width:14px;height:14px;border-radius:50%}
+.keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));gap:6px}
+.key{padding:8px 0;background:#0b1530;color:var(--ink);border:3px solid var(--c)}
+.key.mine{background:var(--c);color:#0b1530}
+.key:disabled{opacity:.25}
+.pend{border:2px dashed var(--p1);border-radius:12px;padding:12px;margin:12px 0}
+.path{color:var(--mute);word-break:break-word}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid #2a3d73}th{color:var(--mute);font-weight:600}
+.stat{display:flex;justify-content:space-between;color:var(--mute)}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--p0);color:#fff;padding:10px 16px;border-radius:10px;font-weight:600;display:none}
+.code{font-size:56px;letter-spacing:.12em;color:var(--p1)}
+</style></head><body><main id="app"></main><div id="toast" role="status"></div>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const s=io();let S=null,board=[],sel=null,t;
+const $=q=>document.querySelector(q),COL=['--p0','--p1','--p2','--p3','--p4'];
+const esc=x=>String(x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pi=id=>S.players.findIndex(p=>p.id===id),pc=id=>`var(${COL[pi(id)%5]})`,pn=id=>esc(S.players[pi(id)]?.name||'?');
+function toast(m){const e=$('#toast');e.textContent=m;e.style.display='block';clearTimeout(t);t=setTimeout(()=>e.style.display='none',3000)}
+s.on('state',x=>{S=x;sel=null;render()});s.on('board',b=>{board=b;if(!S||S.phase!=='play')render()});s.on('err',toast);
+const lb=()=>`<h2>Leaderboard</h2><div class="panel">${board.length?`<table><tr><th>#</th><th>Team</th><th>Moves</th><th>Time</th></tr>${board.map((e,i)=>`<tr><td>${i+1}</td><td>${esc(e.players)}</td><td>${e.moves} <span style="color:var(--mute)">(best ${e.optimal})</span></td><td>${e.secs}s</td></tr>`).join('')}</table>`:'<p>No games finished yet. Be the first on the board.</p>'}</div>`;
+const players=()=>S.players.map((p,i)=>`<span class="pl"><span class="dot" style="background:var(${COL[i]})"></span>${esc(p.name)}${i===0?' (host)':''}${p.id===s.id?' (you)':''}</span>`).join('');
+function render(){
+  if(!S)return $('#app').innerHTML=`<h1>TEAM Ladder</h1><p>Change one letter at a time to turn the start word into TEAM. Each player owns part of the alphabet, so you have to work together.</p>
+  <div class="panel"><input id="name" maxlength="12" placeholder="Your name" aria-label="Your name">
+  <div class="row"><button onclick="s.emit('create',$('#name').value)">Create room</button></div>
+  <h2>Or join a friend</h2><div class="row"><input id="code" maxlength="4" placeholder="Room code" aria-label="Room code" style="text-transform:uppercase"><button class="alt" onclick="s.emit('join',$('#code').value,$('#name').value)">Join room</button></div></div>${lb()}`;
+  if(S.phase==='lobby'){const host=S.players[0].id===s.id,ok=S.players.length>=S.min;
+    return $('#app').innerHTML=`<h1>Waiting room</h1><p>Share this code with your team (${S.min}–${S.max} players).</p><div class="panel"><div class="big code">${S.code}</div><div>${players()}</div></div>
+    ${host?`<button ${ok?'':'disabled'} onclick="s.emit('start')">Start game</button>${ok?'':`<p>Need ${S.min-S.players.length} more player(s).</p>`}`:'<p>Waiting for the host to start.</p>'}${lb()}`}
+  if(S.phase==='done'){const r=S.result,d=r.extra;return $('#app').innerHTML=`<h1>You made TEAM!</h1><div class="panel"><div class="big" style="font-size:40px">${r.moves} moves in ${r.secs}s</div><p>${d===0?'A perfect ladder, matching the shortest path.':`The shortest path was ${r.optimal}. You took ${d} extra.`}</p><div class="path">${S.path.join(' → ')}</div></div><button onclick="s.emit('again')">Play again</button>${lb()}`}
+  const p=S.pending,me=s.id,mine=l=>S.owner[l]===me;
+  $('#app').innerHTML=`<div class="stat"><span>Moves: <b id="mv">${S.moves}</b> (shortest: ${S.optimal})</span><span id="tm"></span></div>
+  <div class="tiles">${[...S.word].map((c,i)=>`<button class="tile ${sel===i?'sel':''}" ${p?'disabled':''} aria-label="Change letter ${i+1}" onclick="sel=${i};render()">${c}</button>`).join('')}</div>
+  <div class="tiles" aria-label="Goal: TEAM">${[...'TEAM'].map(c=>`<span class="tile goal">${c}</span>`).join('')}</div>
+  ${p?`<div class="pend"><b style="color:${pc(p.by)}">${pn(p.by)}</b> wants to play <b>${p.word}</b> (${p.letter} belongs to <b style="color:${pc(p.owner)}">${pn(p.owner)}</b>).
+   ${p.owner===me?`<div class="row" style="margin-top:8px"><button onclick="s.emit('respond',true)">Approve</button><button class="alt" onclick="s.emit('respond',false)">Decline</button></div>`:p.by===me?`<div style="margin-top:8px"><button class="alt" onclick="s.emit('cancel')">Cancel</button></div>`:' Waiting for them.'}</div>`:
+   sel!==null?`<h2>Pick a letter for position ${sel+1}</h2>`:`<p style="text-align:center">Tap a tile to change that letter.</p>`}
+  ${sel!==null&&!p?`<div class="keys">${[...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map(l=>`<button class="key ${mine(l)?'mine':''}" style="--c:${pc(S.owner[l])}" ${l===S.word[sel]?'disabled':''} onclick="s.emit('propose',{pos:${sel},letter:'${l}'})" title="${pn(S.owner[l])}'s letter">${l}</button>`).join('')}</div><p>Filled keys are yours. Other letters need their owner to approve.</p>`:''}
+  <h2>Team</h2><div class="panel">${S.players.map((q,i)=>`<div style="margin-bottom:8px"><span class="pl"><span class="dot" style="background:var(${COL[i]})"></span>${esc(q.name)}${q.id===me?' (you)':''}</span> ${Object.keys(S.owner).filter(l=>S.owner[l]===q.id).sort().join(' ')}</div>`).join('')}</div>
+  <div class="path">${S.path.join(' → ')}</div>`}
+setInterval(()=>{const e=$('#tm');if(e&&S&&S.phase==='play')e.textContent=Math.floor((Date.now()-S.t0)/1000)+'s'},500);
+render();
+</script></body></html>
